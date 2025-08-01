@@ -37,8 +37,7 @@ def extract_text_from_pdf_url(url: str) -> str:
 
 # Dummy answer generator function
 def dummy_answer_engine(text: str, questions: list[str]) -> list[str]:
-    # Replace this with your real LLM logic
-    return [f"Simulated answer for: {q}" for q in questions]
+    return [f"This is a dummy answer for: {q}" for q in questions]
 
 # Endpoint to process the questions based on PDF content
 @app.post("/api/v1/hackrx/run", response_model=QueryResponse)
@@ -46,3 +45,15 @@ def run_query(request: QueryRequest):
     text = extract_text_from_pdf_url(request.documents)
     answers = dummy_answer_engine(text, request.questions)
     return {"answers": answers}
+
+@app.post("/api/v1/hackrx/run", response_model=QueryResponse)
+def run_query(request: QueryRequest):
+    try:
+        text = extract_text_from_pdf_url(request.documents)
+        if not text.strip():
+            raise HTTPException(status_code=400, detail="Extracted text is empty")
+        answers = dummy_answer_engine(text, request.questions)
+        return {"answers": answers}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
