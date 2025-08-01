@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 import requests
 from PyPDF2 import PdfReader
@@ -6,13 +7,21 @@ import io
 
 app = FastAPI()
 
+# Request schema
 class QueryRequest(BaseModel):
     documents: str  # URL to the PDF
     questions: list[str]
 
+# Response schema
 class QueryResponse(BaseModel):
     answers: list[str]
 
+# Root endpoint to redirect to Swagger UI
+@app.get("/", include_in_schema=False)
+def root():
+    return RedirectResponse(url="/docs")
+
+# PDF extraction function
 def extract_text_from_pdf_url(url: str) -> str:
     try:
         response = requests.get(url)
@@ -26,16 +35,14 @@ def extract_text_from_pdf_url(url: str) -> str:
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error reading PDF: {str(e)}")
 
+# Dummy answer generator function
 def dummy_answer_engine(text: str, questions: list[str]) -> list[str]:
     # Replace this with your real LLM logic
     return [f"Simulated answer for: {q}" for q in questions]
 
+# Endpoint to process the questions based on PDF content
 @app.post("/api/v1/hackrx/run", response_model=QueryResponse)
 def run_query(request: QueryRequest):
     text = extract_text_from_pdf_url(request.documents)
     answers = dummy_answer_engine(text, request.questions)
     return {"answers": answers}
-
-@app.get("/")
-def root():
-    return {"message": "HackRx LLM Query API. Go to /docs for Swagger UI."}
