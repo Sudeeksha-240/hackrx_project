@@ -3,3 +3,4 @@ uvicorn
 pydantic
 PyPDF2
 requests
+openai
