@@ -1,45 +1,41 @@
-from fastapi import FastAPI, Header
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
-from typing import List
 import requests
+from PyPDF2 import PdfReader
 import io
-import PyPDF2
 
 app = FastAPI()
 
-# Request schema
 class QueryRequest(BaseModel):
-    documents: str  # URL to PDF
-    questions: List[str]
+    documents: str  # URL to the PDF
+    questions: list[str]
 
-# Response schema
 class QueryResponse(BaseModel):
-    answers: List[str]
+    answers: list[str]
 
-# Endpoint as required by HackRx: /hackrx/run
-@app.post("/hackrx/run", response_model=QueryResponse)
-async def run_query(data: QueryRequest, authorization: str = Header(None)):
-    # Download PDF from URL
+def extract_text_from_pdf_url(url: str) -> str:
     try:
-        pdf_response = requests.get(data.documents)
-        pdf_response.raise_for_status()
-        pdf_stream = io.BytesIO(pdf_response.content)
+        response = requests.get(url)
+        response.raise_for_status()
+        pdf_file = io.BytesIO(response.content)
+        reader = PdfReader(pdf_file)
+        text = ""
+        for page in reader.pages:
+            text += page.extract_text()
+        return text
     except Exception as e:
-        return {"answers": [f"Error fetching PDF: {str(e)}"] * len(data.questions)}
+        raise HTTPException(status_code=400, detail=f"Error reading PDF: {str(e)}")
 
-    # Extract text from PDF
-    try:
-        pdf_reader = PyPDF2.PdfReader(pdf_stream)
-        full_text = ""
-        for page in pdf_reader.pages:
-            full_text += page.extract_text()
-    except Exception as e:
-        return {"answers": [f"Error reading PDF: {str(e)}"] * len(data.questions)}
+def dummy_answer_engine(text: str, questions: list[str]) -> list[str]:
+    # Replace this with your real LLM logic
+    return [f"Simulated answer for: {q}" for q in questions]
 
-    # Placeholder logic: return mock answers (you can integrate GPT or RAG here)
-    answers = []
-    for question in data.questions:
-        answer = f"Answer to: '{question}' — based on extracted content length {len(full_text)}"
-        answers.append(answer)
-
+@app.post("/api/v1/hackrx/run", response_model=QueryResponse)
+def run_query(request: QueryRequest):
+    text = extract_text_from_pdf_url(request.documents)
+    answers = dummy_answer_engine(text, request.questions)
     return {"answers": answers}
+
+@app.get("/")
+def root():
+    return {"message": "HackRx LLM Query API. Go to /docs for Swagger UI."}
