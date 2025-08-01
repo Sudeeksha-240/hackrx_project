@@ -1,45 +1,45 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Header
 from pydantic import BaseModel
+from typing import List
 import requests
-from PyPDF2 import PdfReader
-from io import BytesIO
+import io
+import PyPDF2
 
 app = FastAPI()
 
-class RequestData(BaseModel):
-    documents: str
-    questions: list[str]
+# Request schema
+class QueryRequest(BaseModel):
+    documents: str  # URL to PDF
+    questions: List[str]
 
-@app.post("/api/v1/hackrx/run")
-async def run_query(data: RequestData):
-    # Download and read PDF
-    response = requests.get(data.documents)
-    pdf_reader = PdfReader(BytesIO(response.content))
-    content = ""
-    for page in pdf_reader.pages:
-        content += page.extract_text()
+# Response schema
+class QueryResponse(BaseModel):
+    answers: List[str]
 
-    # Simulate enhanced answer logic
-    results = []
+# Endpoint as required by HackRx: /hackrx/run
+@app.post("/hackrx/run", response_model=QueryResponse)
+async def run_query(data: QueryRequest, authorization: str = Header(None)):
+    # Download PDF from URL
+    try:
+        pdf_response = requests.get(data.documents)
+        pdf_response.raise_for_status()
+        pdf_stream = io.BytesIO(pdf_response.content)
+    except Exception as e:
+        return {"answers": [f"Error fetching PDF: {str(e)}"] * len(data.questions)}
 
+    # Extract text from PDF
+    try:
+        pdf_reader = PyPDF2.PdfReader(pdf_stream)
+        full_text = ""
+        for page in pdf_reader.pages:
+            full_text += page.extract_text()
+    except Exception as e:
+        return {"answers": [f"Error reading PDF: {str(e)}"] * len(data.questions)}
+
+    # Placeholder logic: return mock answers (you can integrate GPT or RAG here)
+    answers = []
     for question in data.questions:
-        if "maternity" in question.lower():
-            results.append({
-                "answer": "Yes, covered after 24 months.",
-                "source_clause": "Clause 3.4",
-                "reasoning": "The policy mentions maternity coverage eligibility after 2 years of continuous coverage."
-            })
-        elif "pre-existing" in question.lower():
-            results.append({
-                "answer": "There is a waiting period of 36 months.",
-                "source_clause": "Clause 2.1",
-                "reasoning": "Clause 2.1 specifies that pre-existing diseases are covered after 36 months of continuous policy."
-            })
-        else:
-            results.append({
-                "answer": "This will be handled in the full implementation.",
-                "source_clause": "N/A",
-                "reasoning": "Detailed clause matching is under development."
-            })
+        answer = f"Answer to: '{question}' — based on extracted content length {len(full_text)}"
+        answers.append(answer)
 
-    return {"answers": results}
+    return {"answers": answers}
